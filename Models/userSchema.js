@@ -1,5 +1,36 @@
 const mongoose = require('mongoose');
 
+const deviceInfoSchema = new mongoose.Schema({
+    browser: {
+        type: String,
+        required: true,
+    },
+    browserVersion: {
+        type: String,
+        required: true,
+    },
+    os: {
+        type: String,
+        required: true,
+    },
+    osVersion: {
+        type: String,
+        required: true,
+    },
+    deviceType: {
+        type: String,
+        required: true,
+    },
+    date: {
+        type: Date,
+        default: Date.now,
+    },
+    deviceId: {
+        type: String,
+        required: true,
+    },
+});
+
 const userSchema = new mongoose.Schema({
     displayName: {
         type: String,
@@ -9,15 +40,19 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
+        lowercase: true,
     },
     password: {
         type: String,
         required: true,
     },
+    bio: {
+        type: String,
+        default: [],
+    },
     role: {
         type: String,
         required: true,
-
     },
     firebaseUid: {
         type: String,
@@ -25,9 +60,16 @@ const userSchema = new mongoose.Schema({
     },
     disabled: {
         type: Boolean,
+        default: false,
+    },
+    deviceInfo: {
+        type: [deviceInfoSchema], // Array of deviceInfo objects
+        default: [],
     }
 }, {
     timestamps: true,
 });
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+
+module.exports = User;

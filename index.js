@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const cookieParser = require('cookie-parser');
 const cors = require("cors");
 const app = express();
 
@@ -9,11 +10,14 @@ app.use(cors({
     origin: ['http://localhost:5173', 'https://exe-software.web.app', 'https://exeservice.online']
 }))
 app.use(express.json());
+app.use(cookieParser());
 
 const PORT = process.env.PORT || 5000;
 
 
 const userRoute = require("./routes/userRoutes");
+const accountRoute = require("./routes/accountRoutes");
+const authRoute = require("./routes/authRoutes");
 
 
 mongoose
@@ -29,6 +33,8 @@ mongoose
 
 
 app.use('/api/users', userRoute)
+app.use('/api/account-bank', accountRoute)
+app.use('/api', authRoute);
 
 
 // Test route

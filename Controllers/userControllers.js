@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
 const serviceAccount = require('../serviceAccount.json');
 admin.initializeApp({
@@ -18,6 +19,45 @@ const getAllUsers = async (req, res) => {
     }
 };
 
+
+// Get admin profile
+const getAdminProfile = async (req, res) => {
+    try {
+        const { email } = req.query;
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.status(200).json([user]); // Wrap user object in an array
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
+// update admin profile
+const updateAdminProfile = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { displayName, email, bio, photoURL } = req.body;
+
+        const updatedUser = await User.findByIdAndUpdate(
+            id,
+            { displayName, email, bio, photoURL },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Profile updated successfully', user: updatedUser });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Create a new user
 const createUser = async (req, res) => {
     const { email, password, displayName, role } = req.body;
 
@@ -26,6 +66,8 @@ const createUser = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ message: "Email already in use." });
         }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         const firebaseUser = await admin.auth().createUser({
             email: email,
@@ -36,7 +78,7 @@ const createUser = async (req, res) => {
         const newUser = new User({
             email: email,
             displayName: displayName,
-            password: password,
+            password: hashedPassword,
             firebaseUid: firebaseUser.uid,
             role: role
         });
@@ -49,6 +91,7 @@ const createUser = async (req, res) => {
     }
 };
 
+// Update a user
 const updateUser = async (req, res) => {
     const { id } = req.params;
     const { email, password, displayName } = req.body;
@@ -61,18 +104,19 @@ const updateUser = async (req, res) => {
 
         const updateParams = {};
         if (email) updateParams.email = email;
-        if (password) updateParams.password = password;
+        if (password) updateParams.password = await bcrypt.hash(password, 10);
         if (displayName) updateParams.displayName = displayName;
 
         await admin.auth().updateUser(user.firebaseUid, updateParams);
 
-        const updatedUser = await User.findByIdAndUpdate(id, req.body, { new: true });
+        const updatedUser = await User.findByIdAndUpdate(id, updateParams, { new: true });
         res.status(200).json(updatedUser);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
 };
 
+// Delete a user
 const deleteUser = async (req, res) => {
     const { id } = req.params;
 
@@ -106,8 +150,7 @@ const enableUser = async (req, res) => {
 
         await admin.auth().updateUser(user.firebaseUid, { disabled: false });
 
-        // Update user status in the database
-        user.disabled = false; // Assuming 'disabled' is the field to track the status
+        user.disabled = false;
         await user.save();
 
         res.status(200).json({ message: "User account enabled." });
@@ -129,8 +172,7 @@ const disableUser = async (req, res) => {
 
         await admin.auth().updateUser(user.firebaseUid, { disabled: true });
 
-        // Update user status in the database
-        user.disabled = true; // Assuming 'disabled' is the field to track the status
+        user.disabled = true;
         await user.save();
 
         res.status(200).json({ message: "User account disabled." });
@@ -140,5 +182,45 @@ const disableUser = async (req, res) => {
     }
 };
 
+// Remove device from admin user
+const removeDevice = async (req, res) => {
+    const { email, deviceId } = req.params;
 
-module.exports = { getAllUsers, createUser, updateUser, deleteUser, enableUser, disableUser };
+    try {
+        const adminUser = await User.findOne({ email });
+
+        if (!adminUser) {
+            return res.status(404).json({ message: 'Admin user not found' });
+        }
+
+        adminUser.deviceInfo = adminUser.deviceInfo.filter(device => device.deviceId !== deviceId);
+        await adminUser.save();
+
+        res.status(200).json({ message: 'Device removed successfully' });
+    } catch (error) {
+        console.error('Error removing device:', error);
+        res.status(500).json({ message: 'Failed to remove device' });
+    }
+};
+
+// Admin logout
+const adminLogout = async (req, res) => {
+    try {
+        const { uid } = req.body;
+
+        if (!uid) {
+            return res.status(400).send({ message: 'User ID is required' });
+        }
+
+        // Revoke refresh tokens for the specified user
+        await admin.auth().revokeRefreshTokens(uid);
+
+        res.send({ message: 'User logged out successfully' });
+    } catch (error) {
+        console.error('Error logging out user:', error);
+        res.status(500).send({ error: true, message: 'Internal Server Error' });
+    }
+};
+
+
+module.exports = { getAllUsers, getAdminProfile, createUser, updateUser, deleteUser, enableUser, disableUser, removeDevice, adminLogout, updateAdminProfile };
